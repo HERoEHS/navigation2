@@ -18,6 +18,7 @@
 #include <memory>
 #include <vector>
 #include <utility>
+#include <iostream>
 
 #include "nav2_rotation_shim_controller/nav2_rotation_shim_controller.hpp"
 #include "nav2_rotation_shim_controller/tools/utils.hpp"
@@ -30,8 +31,7 @@ namespace nav2_rotation_shim_controller
 RotationShimController::RotationShimController()
 : lp_loader_("nav2_core", "nav2_core::Controller"),
   primary_controller_(nullptr),
-  path_updated_(false),
-  in_rotation_(false)
+  path_updated_(false)
 {
 }
 
@@ -44,17 +44,23 @@ void RotationShimController::configure(
   node_ = parent;
   auto node = parent.lock();
 
+  start_nav_flag_sub_ = node->create_subscription<std_msgs::msg::Bool>(
+    "/heroehs/aimy/start_nav_flag", rclcpp::QoS(10),
+    std::bind(&RotationShimController::startNavFlagCallback, this, std::placeholders::_1));
+
+  current_pose_sub_ = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+        "/amcl_pose", 10, std::bind(&RotationShimController::amclPoseCallback, this, std::placeholders::_1));
+
+
   tf_ = tf;
   costmap_ros_ = costmap_ros;
   logger_ = node->get_logger();
   clock_ = node->get_clock();
-
+  
   std::string primary_controller;
   double control_frequency;
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".angular_dist_threshold", rclcpp::ParameterValue(0.785));  // 45 deg
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name_ + ".angular_disengage_threshold", rclcpp::ParameterValue(0.785));
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".forward_sampling_distance", rclcpp::ParameterValue(0.5));
   nav2_util::declare_parameter_if_not_declared(
@@ -69,7 +75,6 @@ void RotationShimController::configure(
     node, plugin_name_ + ".rotate_to_goal_heading", rclcpp::ParameterValue(false));
 
   node->get_parameter(plugin_name_ + ".angular_dist_threshold", angular_dist_threshold_);
-  node->get_parameter(plugin_name_ + ".angular_disengage_threshold", angular_disengage_threshold_);
   node->get_parameter(plugin_name_ + ".forward_sampling_distance", forward_sampling_distance_);
   node->get_parameter(
     plugin_name_ + ".rotate_to_heading_angular_vel",
@@ -102,6 +107,17 @@ void RotationShimController::configure(
       FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *>>(costmap_ros->getCostmap());
 }
 
+void RotationShimController::startNavFlagCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  start_nav_flag_ = msg->data;
+}
+
+void RotationShimController::amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
+{
+  isAtAPoint(*msg);
+  isAtBPoint(*msg);
+}
+
 void RotationShimController::activate()
 {
   RCLCPP_INFO(
@@ -111,7 +127,6 @@ void RotationShimController::activate()
     plugin_name_.c_str());
 
   primary_controller_->activate();
-  in_rotation_ = false;
 
   auto node = node_.lock();
   dyn_params_handler_ = node->add_on_set_parameters_callback(
@@ -195,14 +210,10 @@ geometry_msgs::msg::TwistStamped RotationShimController::computeVelocityCommands
 
       double angular_distance_to_heading =
         std::atan2(sampled_pt_base.position.y, sampled_pt_base.position.x);
-
-      double angular_thresh =
-        in_rotation_ ? angular_disengage_threshold_ : angular_dist_threshold_;
-      if (abs(angular_distance_to_heading) > angular_thresh) {
+      if (fabs(angular_distance_to_heading) > angular_dist_threshold_) {
         RCLCPP_DEBUG(
           logger_,
           "Robot is not within the new path's rough heading, rotating to heading...");
-        in_rotation_ = true;
         return computeRotateToHeadingCommand(angular_distance_to_heading, pose, velocity);
       } else {
         RCLCPP_DEBUG(
@@ -221,7 +232,6 @@ geometry_msgs::msg::TwistStamped RotationShimController::computeVelocityCommands
   }
 
   // If at this point, use the primary controller to path track
-  in_rotation_ = false;
   return primary_controller_->computeVelocityCommands(pose, velocity, goal_checker);
 }
 
@@ -259,7 +269,6 @@ geometry_msgs::msg::PoseStamped RotationShimController::getSampledPathGoal()
   }
 
   auto goal = current_path_.poses.back();
-  goal.header.frame_id = current_path_.header.frame_id;
   goal.header.stamp = clock_->now();
   return goal;
 }
@@ -274,6 +283,33 @@ RotationShimController::transformPoseToBaseFrame(const geometry_msgs::msg::PoseS
   return pt_base.pose;
 }
 
+// A포인트와 B포인트에 위치했는지 판단하는 함수
+void RotationShimController::isAtAPoint(const geometry_msgs::msg::PoseWithCovarianceStamped &robot_pose_)
+{
+    const double position_tolerance = 0.4;  // 허용 오차 (미터)
+    if(fabs(robot_pose_.pose.pose.position.x - 0.0) < position_tolerance && fabs(robot_pose_.pose.pose.position.y - 0.0) < position_tolerance)
+    { 
+        is_robot_point_A = true;
+    }
+    else
+    {
+        is_robot_point_A = false;
+    }
+}
+
+void RotationShimController::isAtBPoint(const geometry_msgs::msg::PoseWithCovarianceStamped &robot_pose_)
+{
+    const double position_tolerance = 0.4;  // 허용 오차 (미터)
+    if(fabs(robot_pose_.pose.pose.position.x - 3.08) < position_tolerance && fabs(robot_pose_.pose.pose.position.y - 0.255) < position_tolerance)
+    {
+        is_robot_point_B = true;
+    }
+    else
+    {
+        is_robot_point_B = false;
+    }
+}
+
 geometry_msgs::msg::TwistStamped
 RotationShimController::computeRotateToHeadingCommand(
   const double & angular_distance_to_heading,
@@ -282,7 +318,23 @@ RotationShimController::computeRotateToHeadingCommand(
 {
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header = pose.header;
-  const double sign = angular_distance_to_heading > 0.0 ? 1.0 : -1.0;
+  // A지점에 있고 + B포인트로 가려는 입력이 들어왔을 때 => 반시계 방향으로 회전
+  if (is_robot_point_A && start_nav_flag_)                                                       
+  {
+    // std::cout << "반시계 회전" << '\n';
+    sign = 1.0;  // 반시계 방향 회전
+  }
+  // B지점에 있고 + A포인트로 가려는 입력이 들어왔을 때 => 반시계 방향으로 회전
+  else if (is_robot_point_B && start_nav_flag_)                                                  
+  {
+    // std::cout << "시계 회전" << '\n';
+    sign = -1.0;  // 시계 방향 회전
+  }
+  else  // 그 외의 경우 (일반 주행 상황)
+  {
+    sign = angular_distance_to_heading > 0.0 ? 1.0 : -1.0;
+  }
+
   const double angular_vel = sign * rotate_to_heading_angular_vel_;
   const double & dt = control_duration_;
   const double min_feasible_angular_speed = velocity.angular.z - max_angular_accel_ * dt;

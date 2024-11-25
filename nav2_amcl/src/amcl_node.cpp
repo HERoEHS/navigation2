@@ -27,6 +27,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "message_filters/subscriber.h"
 #include "nav2_amcl/angleutils.hpp"
@@ -940,6 +941,7 @@ AmclNode::publishAmclPose(
   p->pose.pose.position.y = hyps[max_weight_hyp].pf_pose_mean.v[1];
   p->pose.pose.orientation = orientationAroundZAxis(hyps[max_weight_hyp].pf_pose_mean.v[2]);
   // Copy in the covariance, converting from 3-D to 6-D
+
   pf_sample_set_t * set = pf_->sets + pf_->current_set;
   for (int i = 0; i < 2; i++) {
     for (int j = 0; j < 2; j++) {

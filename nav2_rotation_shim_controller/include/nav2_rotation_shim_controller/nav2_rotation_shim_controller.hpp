@@ -32,6 +32,8 @@
 #include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "angles/angles.h"
 
+#include "std_msgs/msg/bool.hpp"  
+
 namespace nav2_rotation_shim_controller
 {
 
@@ -106,7 +108,18 @@ public:
    */
   void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
+  // A포인트와 B포인트에 위치했는지 판단하는 함수
+  void isAtAPoint(const geometry_msgs::msg::PoseWithCovarianceStamped &robot_pose_);
+  void isAtBPoint(const geometry_msgs::msg::PoseWithCovarianceStamped &robot_pose_);
+
 protected:
+  // Subscriber for the start_nav_flag topic
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr start_nav_flag_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr current_pose_sub_;
+
+  void startNavFlagCallback(const std_msgs::msg::Bool::SharedPtr msg);
+  void amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  
   /**
    * @brief Finds the point on the path that is roughly the sampling
    * point distance away from the robot for use.
@@ -172,10 +185,15 @@ protected:
   nav2_core::Controller::Ptr primary_controller_;
   bool path_updated_;
   nav_msgs::msg::Path current_path_;
-  double forward_sampling_distance_, angular_dist_threshold_, angular_disengage_threshold_;
+  double forward_sampling_distance_, angular_dist_threshold_;
   double rotate_to_heading_angular_vel_, max_angular_accel_;
   double control_duration_, simulate_ahead_time_;
-  bool rotate_to_goal_heading_, in_rotation_;
+  bool rotate_to_goal_heading_;
+  bool start_nav_flag_ = false;
+  bool is_robot_point_A = false;
+  bool is_robot_point_B = false;
+  double sign = 1.0;
+  geometry_msgs::msg::PoseWithCovarianceStamped robot_pose_;
 
   // Dynamic parameters handler
   std::mutex mutex_;
