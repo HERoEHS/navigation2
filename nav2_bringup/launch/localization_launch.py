@@ -25,6 +25,10 @@ from launch_ros.actions import Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from nav2_common.launch import RewrittenYaml
 
+## 강제 종료를 위한 모듈 ## 
+from launch.actions import EmitEvent
+from launch.events import Shutdown
+
 
 def generate_launch_description():
     # Get the launch directory
@@ -157,7 +161,9 @@ def generate_launch_description():
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[{'use_sim_time': use_sim_time},
                             {'autostart': autostart},
-                            {'node_names': lifecycle_nodes}])
+                            {'node_names': lifecycle_nodes}],
+                on_exit=[EmitEvent(event=Shutdown())]
+                ),
         ]
     )
 

@@ -27,6 +27,10 @@ from launch_ros.actions import PushRosNamespace
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml, ReplaceString
 
+## 강제 종료를 위한 모듈 ## 
+from launch.actions import EmitEvent
+from launch.events import Shutdown
+
 
 def generate_launch_description():
     # Get the launch directory
@@ -145,7 +149,9 @@ def generate_launch_description():
             parameters=[configured_params, {'autostart': autostart}],
             arguments=['--ros-args', '--log-level', log_level],
             remappings=remappings,
-            output='screen'),
+            output='screen',
+            on_exit=[EmitEvent(event=Shutdown())]       # 종료 시 Shutdown 이벤트 발생
+            ),
 
         # IncludeLaunchDescription(
         #     PythonLaunchDescriptionSource(os.path.join(launch_dir, 'slam_launch.py')),
