@@ -22,7 +22,7 @@
 #include "nav2_costmap_2d/layered_costmap.hpp"
 #include "nav2_costmap_2d/obstacle_layer.hpp"
 #include "../testing_helper.hpp"
-#include "tf2_ros/buffer.hpp"
+#include "tf2_ros/buffer.h"
 
 
 class RclCppFixture
