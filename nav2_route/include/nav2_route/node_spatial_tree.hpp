@@ -15,6 +15,7 @@
 #ifndef NAV2_ROUTE__NODE_SPATIAL_TREE_HPP_
 #define NAV2_ROUTE__NODE_SPATIAL_TREE_HPP_
 
+#include <cstdint>
 #include <string>
 #include <memory>
 #include <vector>
@@ -54,8 +55,11 @@ struct GraphAdaptor
   const Graph & obj;
 };
 
+// nanoflann IndexType default이 버전/fork에 따라 uint32_t 또는 size_t로 갈리므로
+// 무조건 uint32_t로 명시 — 구버전(default=uint32_t)엔 무영향, 신버전엔 타입 교정
 typedef nanoflann::KDTreeSingleIndexAdaptor<
-    nanoflann::L2_Simple_Adaptor<double, GraphAdaptor>, GraphAdaptor, DIMENSION> kd_tree_t;
+    nanoflann::L2_Simple_Adaptor<double, GraphAdaptor>, GraphAdaptor, DIMENSION,
+    uint32_t> kd_tree_t;
 
 /**
  * @class nav2_route::NodeSpatialTree
