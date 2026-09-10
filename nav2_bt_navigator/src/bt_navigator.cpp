@@ -59,6 +59,8 @@ BtNavigator::BtNavigator(rclcpp::NodeOptions options)
     "nav2_speed_controller_bt_node",
     "nav2_truncate_path_action_bt_node",
     "nav2_truncate_path_local_action_bt_node",
+    "nav2_get_pose_from_path_action_bt_node",
+    "nav2_concatenate_paths_action_bt_node",
     "nav2_goal_updater_node_bt_node",
     "nav2_recovery_node_bt_node",
     "nav2_pipeline_sequence_bt_node",
