@@ -140,6 +140,7 @@
     </Action>
 
     <Action ID="TruncatePathLocal">
+      <input_port name="input_path" type="nav_msgs::msg::Path">Path to truncate.</input_port>
       <input_port name="distance_forward">Distance in forward direction</input_port>
       <input_port name="distance_backward">Distance in backward direction</input_port>
       <input_port name="robot_frame">Robot base frame id</input_port>
@@ -148,6 +149,32 @@
       <input_port name="angular_distance_weight">Weight of angular distance relative to positional distance when finding which path pose is closest to robot. Not applicable on paths without orientations assigned</input_port>
       <input_port name="max_robot_pose_search_dist">Maximum forward integrated distance along the path (starting from the last detected pose) to bound the search for the closest pose to the robot. When set to infinity (default), whole path is searched every time</input_port>
       <output_port name="output_path">Truncated path to utilize</output_port>
+    </Action>
+
+    <Action ID="GetPoseFromPath">
+      <input_port name="path" type="nav_msgs::msg::Path">Path to extract pose from.</input_port>
+      <input_port name="index" type="int" default="0">Index from path to use. Use `-1` to get the last pose, `-2` for second to last, and so on.</input_port>
+      <output_port name="pose" type="geometry_msgs::msg::PoseStamped">Pose from path, with the Path's set header.</output_port>
+    </Action>
+
+    <Action ID="ConcatenatePaths">
+      <input_port name="input_path1" type="nav_msgs::msg::Path">First path to concatenate.</input_port>
+      <input_port name="input_path2" type="nav_msgs::msg::Path">Second path to concatenate.</input_port>
+      <output_port name="output_path" type="nav_msgs::msg::Path">Output concatenated path.</output_port>
+    </Action>
+
+    <Action ID="ComputeRoute">
+      <input_port name="start" type="geometry_msgs::msg::PoseStamped">Start pose. Optional. Only used if not left empty. Takes in a blackboard variable, e.g. "{start}".</input_port>
+      <input_port name="goal" type="geometry_msgs::msg::PoseStamped">Goal pose. Takes in a blackboard variable, e.g. "{goal}".</input_port>
+      <input_port name="start_id" type="unsigned int">Start node ID to use.</input_port>
+      <input_port name="goal_id" type="unsigned int">Goal node ID to use.</input_port>
+      <input_port name="use_start" type="bool" default="false">Whether to use the start or use TF to obtain the robot's start pose.</input_port>
+      <input_port name="use_poses" type="bool" default="false">Whether to use the start and goal poses or start and goal node IDs.</input_port>
+      <input_port name="server_name" type="string">Action server name. If not specified, `compute_route` is used.</input_port>
+      <input_port name="server_timeout" type="chrono::milliseconds">Action server timeout (ms).</input_port>
+      <output_port name="route" type="nav2_msgs::msg::Route">Route created by action server. Takes in a blackboard variable, e.g. "{route}".</output_port>
+      <output_port name="path" type="nav_msgs::msg::Path">Path created by action server. Takes in a blackboard variable, e.g. "{path}".</output_port>
+      <output_port name="planning_time" type="builtin_interfaces::msg::Duration">Time it took to compute the route.</output_port>
     </Action>
 
     <Action ID="PlannerSelector">
