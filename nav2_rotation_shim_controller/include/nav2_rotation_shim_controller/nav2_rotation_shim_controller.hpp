@@ -123,6 +123,15 @@ protected:
   geometry_msgs::msg::PoseStamped getSampledPathPt();
 
   /**
+   * @brief Pick the rotation direction for a near-180 deg turn from where the path
+   * continues (sign of the largest lateral excursion within uturn_lookahead_ path length),
+   * instead of the sign of a point right behind the robot. Falls back to CCW.
+   * @return angular_distance_to_heading with the chosen sign
+   */
+  double resolveUturnDirection(
+    double angular_distance_to_heading, const geometry_msgs::msg::PoseStamped & pose);
+
+  /**
    * @brief Find the goal point in path
    * May throw exception if the path is empty
    * @return pt location of the output point
@@ -189,6 +198,7 @@ protected:
   double forward_sampling_distance_, angular_dist_threshold_, angular_disengage_threshold_;
   double rotate_to_heading_angular_vel_, max_angular_accel_;
   double control_duration_, simulate_ahead_time_;
+  double uturn_lookahead_;
   double max_cost_threshold_;
   bool rotate_to_goal_heading_, in_rotation_, rotate_to_heading_once_;
   bool closed_loop_;

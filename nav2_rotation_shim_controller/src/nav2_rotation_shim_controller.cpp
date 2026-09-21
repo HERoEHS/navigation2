@@ -58,6 +58,8 @@ void RotationShimController::configure(
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".forward_sampling_distance", rclcpp::ParameterValue(0.5));
   nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name_ + ".uturn_lookahead", rclcpp::ParameterValue(0.0));  // 0 = off
+  nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".rotate_to_heading_angular_vel", rclcpp::ParameterValue(1.8));
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".max_angular_accel", rclcpp::ParameterValue(3.2));
@@ -80,6 +82,7 @@ void RotationShimController::configure(
   node->get_parameter(plugin_name_ + ".angular_dist_threshold", angular_dist_threshold_);
   node->get_parameter(plugin_name_ + ".angular_disengage_threshold", angular_disengage_threshold_);
   node->get_parameter(plugin_name_ + ".forward_sampling_distance", forward_sampling_distance_);
+  node->get_parameter(plugin_name_ + ".uturn_lookahead", uturn_lookahead_);
   node->get_parameter(
     plugin_name_ + ".rotate_to_heading_angular_vel",
     rotate_to_heading_angular_vel_);
@@ -225,6 +228,7 @@ geometry_msgs::msg::TwistStamped RotationShimController::computeVelocityCommands
           sampled_pt_base.position.y,
           sampled_pt_base.position.x);
       }
+      angular_distance_to_heading = resolveUturnDirection(angular_distance_to_heading, pose);
 
       double angular_thresh =
         in_rotation_ ? angular_disengage_threshold_ : angular_dist_threshold_;
@@ -257,6 +261,40 @@ geometry_msgs::msg::TwistStamped RotationShimController::computeVelocityCommands
   auto cmd_vel = primary_controller_->computeVelocityCommands(pose, velocity, goal_checker);
   last_angular_vel_ = cmd_vel.twist.angular.z;
   return cmd_vel;
+}
+
+
+double RotationShimController::resolveUturnDirection(
+  double angular_distance_to_heading, const geometry_msgs::msg::PoseStamped & pose)
+{
+  // Only near 180 deg: atan2 of the 0.6 m sample point then flips on a few cm of lateral offset.
+  constexpr double kUturnAngle = 2.618;  // 150 deg
+  constexpr double kMinLateral = 0.10;   // m — below this the path is straight; fall back to CCW
+  if (uturn_lookahead_ <= 0.0 || std::fabs(angular_distance_to_heading) < kUturnAngle ||
+    current_path_.poses.size() < 2)
+  {
+    return angular_distance_to_heading;
+  }
+  // One TF: robot pose into the path frame; then lateral offsets are plain trig per point.
+  geometry_msgs::msg::PoseStamped robot;
+  if (!nav2_util::transformPoseInTargetFrame(pose, robot, *tf_, current_path_.header.frame_id)) {
+    return angular_distance_to_heading;
+  }
+  const double yaw = tf2::getYaw(robot.pose.orientation);
+  const double sy = std::sin(yaw), cy = std::cos(yaw);
+  double arc = 0.0, best_lateral = 0.0;
+  for (unsigned int i = 1; i < current_path_.poses.size() && arc < uturn_lookahead_; i++) {
+    const auto & a = current_path_.poses[i - 1].pose.position;
+    const auto & b = current_path_.poses[i].pose.position;
+    arc += std::hypot(b.x - a.x, b.y - a.y);
+    const double dx = b.x - robot.pose.position.x, dy = b.y - robot.pose.position.y;
+    const double lateral = -sy * dx + cy * dy;  // +: path point on the robot's left
+    if (std::fabs(lateral) > std::fabs(best_lateral)) {
+      best_lateral = lateral;
+    }
+  }
+  const double sign = (std::fabs(best_lateral) < kMinLateral) ? 1.0 : (best_lateral > 0.0 ? 1.0 : -1.0);
+  return sign * std::fabs(angular_distance_to_heading);
 }
 
 geometry_msgs::msg::PoseStamped RotationShimController::getSampledPathPt()
@@ -425,6 +463,8 @@ RotationShimController::dynamicParametersCallback(std::vector<rclcpp::Parameter>
         angular_dist_threshold_ = parameter.as_double();
       } else if (name == plugin_name_ + ".forward_sampling_distance") {
         forward_sampling_distance_ = parameter.as_double();
+      } else if (name == plugin_name_ + ".uturn_lookahead") {
+        uturn_lookahead_ = parameter.as_double();
       } else if (name == plugin_name_ + ".rotate_to_heading_angular_vel") {
         rotate_to_heading_angular_vel_ = parameter.as_double();
       } else if (name == plugin_name_ + ".max_angular_accel") {
