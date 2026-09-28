@@ -276,6 +276,9 @@ void
 RouteServer::processRouteRequest(
   std::shared_ptr<nav2_util::SimpleActionServer<ActionT>> & action_server)
 {
+  // Route, the tracker and the rerouting state point into graph_ until this returns:
+  // keep setRouteGraph() from rebuilding it underneath them (use-after-free, SIGSEGV)
+  std::shared_lock<std::shared_mutex> graph_lock(graph_mutex_);
   auto goal = action_server->get_current_goal();
   auto result = std::make_shared<typename ActionT::Result>();
   ReroutingState rerouting_info;
@@ -380,6 +383,16 @@ void RouteServer::setRouteGraph(
   const std::shared_ptr<nav2_msgs::srv::SetRouteGraph::Request> request,
   std::shared_ptr<nav2_msgs::srv::SetRouteGraph::Response> response)
 {
+  std::unique_lock<std::shared_mutex> graph_lock(graph_mutex_, std::try_to_lock);
+  if (!graph_lock.owns_lock()) {
+    RCLCPP_WARN(
+      get_logger(),
+      "Refusing to set new route graph %s while a route is being computed or tracked, "
+      "retry once it is done.", request->graph_filepath.c_str());
+    response->success = false;
+    return;
+  }
+
   RCLCPP_INFO(get_logger(), "Setting new route graph: %s.", request->graph_filepath.c_str());
   graph_.clear();
   id_to_graph_map_.clear();
