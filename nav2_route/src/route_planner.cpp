@@ -93,6 +93,8 @@ void RoutePlanner::findShortestGraphTraversal(
   start_id_ = start_node->nodeid;
   goal_id_ = goal_node->nodeid;
   start_node->search_state.integrated_cost = 0.0;
+  // A scorer that threw mid-search left nodes queued; after a graph swap they would dangle
+  clearQueue();
   addNode(0.0, start_node);
 
   NodePtr neighbor{nullptr};
