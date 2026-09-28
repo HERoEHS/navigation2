@@ -21,6 +21,7 @@
 #include <vector>
 #include <unordered_map>
 #include <mutex>
+#include <shared_mutex>
 
 #include "nav2_util/lifecycle_node.hpp"
 #include "tf2_ros/transform_listener.h"
@@ -225,6 +226,9 @@ protected:
   // State Data
   Graph graph_;
   GraphToIDMap id_to_graph_map_;
+  // Route requests hold this shared for as long as they keep pointers into graph_
+  // (a tracked route: the whole action). setRouteGraph() needs it exclusively.
+  std::shared_mutex graph_mutex_;
   std::string route_frame_, global_frame_, base_frame_;
   double max_planning_time_;
 };
